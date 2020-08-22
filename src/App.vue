@@ -1,16 +1,16 @@
 <template>
-  <div class="container mx-auto">
-    <DateRangeCalculator />
+  <div>
+    <DateRange />
   </div>
 </template>
 
 <script>
-import DateRangeCalculator from './components/DateRangeCalculator.vue'
+import DateRange from './components/DateRange.vue'
 
 export default {
   name: 'App',
   components: {
-    DateRangeCalculator,
+    DateRange,
   },
 }
 </script>

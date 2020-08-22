@@ -1,5 +1,6 @@
 import {
   reactive,
+  onMounted,
   watchEffect,
   toRefs,
   ToRefs,
@@ -36,7 +37,6 @@ export const enum DateRangeDirection {
 export const assertsIsDirection = (
   value: DateRangeDirection,
 ): /*asserts*/ value is DateRangeDirection => {
-  console.log('assertsIsDirection', value)
   switch (directions.includes(value)) {
     case true:
       // If it was TypeScript 3.7+ we could use asserts ^
@@ -70,19 +70,29 @@ export interface IDateRange {
   max: string
 }
 
-export interface IComputed {
-  duration: Ref<number>
+export interface IPreferences {
+  locale: string
 }
 
 export interface IDistance {
   unit: DurationUnit
 }
 
-export interface IPreferences {
-  locale: string
+export interface IComputed {
+  duration: Ref<number>
 }
 
 export type IDistanceDatesModel = IDateRange & IDistance & IPreferences
+
+export const distanceDatesModelFields = new Set([
+  'direction',
+  'locale',
+  'max',
+  'min',
+  'unit',
+])
+
+export const isInDistanceDatesModelFields = distanceDatesModelFields.has
 
 export type ILoggerFn = (message?: any, ...optionalParams: any[]) => void
 export type ILogger = Record<'info' | 'log' | 'debug' | 'warn', ILoggerFn>
@@ -118,6 +128,7 @@ const defaultOptions: IDistanceDatesModelOptions = {
 }
 
 export default (
+  location: Location,
   options: Partial<IDistanceDatesModelOptions> = {},
 ): IDistanceDatesSurface => {
   const duration = ref(0)
@@ -141,6 +152,8 @@ export default (
     unit: opts.defaultDistanceUnit,
   })
 
+  logger.debug(`use-distance-dates: startup`)
+
   const changeDirection = (direction: DateRangeDirection): void => {
     logger.info(`use-distance-dates: changeDirection(${direction})`)
     try {
@@ -158,26 +171,34 @@ export default (
   }
 
   const changeDateRange = (
-    change: Partial<IDateRange & IDistance> = {},
+    changeset: Partial<IDistanceDatesModel> = {},
   ): void => {
-    const newState: IDateRange & IDistance = {
-      unit: opts.defaultDistanceUnit,
-      direction: 'FUTURE',
-      min,
-      max: min,
-      ...change,
+    const before = { ...unref(distanceDates) }
+    for (const [key, value] of Object.entries(changeset)) {
+      if (distanceDatesModelFields.has(key)) {
+        distanceDates[key] = value
+      }
     }
-    logger.info(`use-distance-dates: changeDateRange`, {
-      before: { ...unref(distanceDates) },
-      after: newState,
+    logger.debug(`use-distance-dates: changeDateRange`, {
+      before,
+      after: { ...unref(distanceDates) },
     })
-    distanceDates.min = newState.min
-    distanceDates.max = newState.max
-    distanceDates.direction = newState.direction
-    distanceDates.unit = newState.unit
   }
 
-  logger.info(`use-distance-dates`)
+  onMounted(() => {
+    const { search = '' } = location
+    const parsed = String(search || '')
+      .replace(/^\?/, '')
+      .split('&')
+      .map((i) => i.split('='))
+    const changeset: Partial<IDistanceDatesModel> = {}
+    for (const [key, value] of parsed) {
+      if (distanceDatesModelFields.has(key)) {
+        changeset[key] = value
+      }
+    }
+    changeDateRange(changeset)
+  })
 
   watchEffect(() => {
     const unit = distanceDates.unit
@@ -186,7 +207,7 @@ export default (
     const interval = Interval.fromDateTimes(min, max)
     const computedDuration = Math.ceil(interval.length(unit))
     duration.value = computedDuration
-    logger.info(`use-distance-dates: watchEffect`, {
+    logger.debug(`use-distance-dates: watchEffect`, {
       duration: unref(duration),
       max: unref(distanceDates.max),
       min: unref(distanceDates.min),

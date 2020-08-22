@@ -1,7 +1,7 @@
 <template>
   <div class="component-root">
     <dl>
-      <dt>Duration</dt>
+      <dt>Durée</dt>
       <dd>
         {{ duration }}
         <span>{{ unit }}</span>
@@ -38,7 +38,7 @@
         <label
           for="durationUnit"
         >
-          Unit
+          Unité de mesure
         </label>
         <select v-model="unit" name="unit" id="durationUnit">
           <option
@@ -53,12 +53,12 @@
       </fieldset>
       <hr />
       <fieldset>
-        <legend>Date range</legend>
+        <legend>Dates</legend>
         <label
           for="min"
           class="block text-gray-700 text-sm font-bold mb-2"
         >
-          From
+          De
         </label>
         <input
           type="date"
@@ -72,7 +72,7 @@
           for="max"
           class="block text-gray-700 text-sm font-bold mb-2"
         >
-          To
+          À
         </label>
         <input
           type="date"
@@ -83,41 +83,35 @@
         />
         <span class="validity"></span>
       </fieldset>
-      <button type="submit">Apply</button>
+      <button type="submit">Calculer</button>
     </form>
   </div>
 </template>
 
 <script lang="ts">
-import { onMounted } from 'vue'
-import { default as useDistanceDates, resetCalculateBasedForm, directions, durationUnits } from '../use-distance-dates.ts'
-import { useBrowserLocation } from '@vueuse/core'
+import { onMounted, render } from 'vue'
+import {
+  default as useDistanceDates,
+  directions,
+  distanceDatesModelFields,
+  durationUnits,
+  IDistanceDatesModel,
+  resetCalculateBasedForm,
+} from '../use-distance-dates.ts'
 
 export default {
-  name: 'DateRangeCalculator',
-  props: {
-    msg: String
-  },
+  name: 'DateRange',
   setup() {
     const {
       distanceDates,
       changeDateRange,
       duration,
-    } = useDistanceDates({
+    } = useDistanceDates(
+    location,
+    {
       // logger: console
     })
-    // const currentLocation = useBrowserLocation()
-    const search = window.location.search
-    onMounted(() => {
-      const parsed = String(search||'').replace(/^\?/, '').split('&').map(i => i.split('='))
-      const dto: Record<string, string> = {}
-      for (const [key, value] of parsed) {
-        dto[key] = value
-      }
-      console.log('watchEffect', { search, parsed, dto })
-      changeDateRange(dto)
-    })
-    console.log('setup', { search })
+
     const {
       direction,
       max,
