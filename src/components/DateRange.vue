@@ -75,6 +75,7 @@
           name="today"
           value="min"
           v-model="distanceDates.today.value"
+          @click="distanceDatesTodayClick"
         />
         <label
           for="max"
@@ -94,9 +95,10 @@
           name="today"
           value="max"
           v-model="distanceDates.today.value"
+          @click="distanceDatesTodayClick"
         />
       </fieldset>
-      <button type="submit">Calculer</button>
+      <button type="submit">Appliquer</button>
     </form>
   </div>
 </template>
@@ -128,6 +130,18 @@ export default defineComponent<IDateRangeComponentProps, IDateRangeData, {}>({
       durationUnits,
     }
   },
+  methods: {
+    distanceDatesTodayClick(event) {
+      // If clicking on a radio button that's already
+      // clicked, unset it.
+      const today = this.distanceDates.today.value
+      const { target = {} } = event
+      const { value = '' } = target
+      if (today === value) {
+        this.distanceDates.today.value = false
+      }
+    }
+  }
 })
 </script>
 

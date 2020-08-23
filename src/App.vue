@@ -17,7 +17,7 @@ export default defineComponent({
   },
   setup() {
     const useDistanceDatesOptions = {
-      logger: console,
+      // logger: console,
     }
     const { distanceDates, duration } = useDistanceDates(
       location,
