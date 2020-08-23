@@ -4,7 +4,7 @@
       <dt>Durée</dt>
       <dd>
         {{ duration }}
-        <span>{{ unit }}</span>
+        <span>{{ distanceDates.unit.value }}</span>
       </dd>
     </dl>
     <!--
@@ -40,48 +40,61 @@
         >
           Unité de mesure
         </label>
-        <select v-model="unit" name="unit" id="durationUnit">
+        <select
+          v-model="distanceDates.unit.value"
+          name="unit"
+          id="durationUnit"
+        >
           <option
-            v-for="(durationUnit, index) of durationUnits"
+            v-for="(item, index) of durationUnits"
             :key="index"
-            :value="durationUnit"
-            :selected="durationUnit === unit"
+            :value="item"
+            :selected="item === distanceDates.unit.value"
           >
-            {{ durationUnit }}
+            {{ item }}
           </option>
         </select>
       </fieldset>
-      <hr />
       <fieldset>
         <legend>Dates</legend>
         <label
           for="min"
-          class="block text-gray-700 text-sm font-bold mb-2"
         >
           De
         </label>
         <input
-          type="date"
-          v-model="min"
-          :max="max"
-          name="min"
+          :max="distanceDates.max.value"
           id="min"
+          name="min"
+          type="date"
+          v-model="distanceDates.min.value"
         />
         <span class="validity"></span>
+        <input
+          type="radio"
+          name="today"
+          value="min"
+          v-model="distanceDates.today.value"
+        />
         <label
           for="max"
-          class="block text-gray-700 text-sm font-bold mb-2"
         >
           À
         </label>
         <input
-          type="date"
-          v-model="max"
-          :min="min"
-          name="max"
+          :min="distanceDates.min.value"
           id="max"
+          name="max"
+          type="date"
+          v-model="distanceDates.max.value"
         />
         <span class="validity"></span>
+        <input
+          type="radio"
+          name="today"
+          value="max"
+          v-model="distanceDates.today.value"
+        />
       </fieldset>
       <button type="submit">Calculer</button>
     </form>
@@ -89,51 +102,33 @@
 </template>
 
 <script lang="ts">
-import { onMounted, render } from 'vue'
+import { defineComponent } from 'vue'
 import {
-  default as useDistanceDates,
-  directions,
-  distanceDatesModelFields,
+  IDateRangeComponentProps,
+  IDateRangeData,
   durationUnits,
-  IDistanceDatesModel,
-  resetCalculateBasedForm,
+  DurationUnit,
+  directions,
 } from '../use-distance-dates.ts'
 
-export default {
+export default defineComponent<IDateRangeComponentProps, IDateRangeData, {}>({
   name: 'DateRange',
-  setup() {
-    const {
-      distanceDates,
-      changeDateRange,
-      duration,
-    } = useDistanceDates(
-    location,
-    {
-      // logger: console
-    })
-
-    const {
-      direction,
-      max,
-      min,
-      unit,
-    } = distanceDates
-    return {
-      direction,
-      duration,
-      max,
-      min,
-      unit,
-    }
+  props: {
+    distanceDates: {
+      required: true,
+    },
+    duration: {
+      required: true,
+      default: 0,
+    },
   },
   data() {
     return {
-      count: 0,
-      durationUnits,
       directions,
+      durationUnits,
     }
-  }
-}
+  },
+})
 </script>
 
 <style scoped>

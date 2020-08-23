@@ -13,7 +13,6 @@ import { DateTime, Interval, DurationUnit } from 'luxon'
 
 export const durationUnits: ReadonlyArray<DurationUnit> = [
   'years',
-  'quarters',
   'months',
   'weeks',
   'days',
@@ -32,6 +31,16 @@ export const directions: ReadonlyArray<IDateRangeDirection> = [
 export const enum DateRangeDirection {
   Future = 'FUTURE',
   Past = 'PAST',
+}
+
+export interface IDateRangeComponentProps {
+  distanceDates: IDistanceDatesModel
+  duration: number
+}
+
+export interface IDateRangeData {
+  directions: ReadonlyArray<IDateRangeDirection>
+  durationUnits: ReadonlyArray<DurationUnit>
 }
 
 export const assertsIsDirection = (
@@ -66,8 +75,9 @@ export const isFuture = (direction: DateRangeDirection): boolean => {
 
 export interface IDateRange {
   direction: IDateRangeDirection
-  min: string
   max: string
+  min: string
+  today: 'max' | 'min' | false
 }
 
 export interface IPreferences {
@@ -89,6 +99,7 @@ export const distanceDatesModelFields = new Set([
   'locale',
   'max',
   'min',
+  'today',
   'unit',
 ])
 
@@ -132,7 +143,7 @@ export default (
   options: Partial<IDistanceDatesModelOptions> = {},
 ): IDistanceDatesSurface => {
   const duration = ref(0)
-  const min = DateTime.local().toISODate()
+  const today = DateTime.local().toISODate()
 
   const opts: IDistanceDatesModelOptions = {
     ...defaultOptions,
@@ -147,8 +158,9 @@ export default (
   const distanceDates = reactive<IDistanceDatesModel>({
     direction: opts.defaultDirection,
     locale: opts.locale,
-    max: min,
-    min,
+    max: today,
+    min: today,
+    today: false,
     unit: opts.defaultDistanceUnit,
   })
 
@@ -176,8 +188,22 @@ export default (
     const before = { ...unref(distanceDates) }
     for (const [key, value] of Object.entries(changeset)) {
       if (distanceDatesModelFields.has(key)) {
-        distanceDates[key] = value
+        if (
+          key === 'today' &&
+          value !== false &&
+          /^(max|min)$/.test(String(value)) === false
+        ) {
+          const message = `
+            Invalid value for field today "${value}", must either be false, or 'max' or 'min'
+          `
+          logger.warn(message)
+        } else {
+          distanceDates[key] = value
+        }
       }
+    }
+    if ('today' in changeset && typeof changeset.today === 'string') {
+      distanceDates[changeset.today] = today
     }
     logger.debug(`use-distance-dates: changeDateRange`, {
       before,
