@@ -1,5 +1,5 @@
 <template>
-  <form @submit.prevent="$emit('calculate', form)">
+  <form @submit.prevent="emit">
     <fieldset>
       <legend>Faire un nouveau calcul</legend>
       <input
@@ -67,6 +67,18 @@ export default defineComponent({
     onChangeSelectDateRangeUnit({value}) {
       this.form.relativeUnit = value
     },
+    emit() {
+      const {
+        relativeCount,
+        relativeDirection,
+        relativeUnit
+      } = this.form
+      this.$emit('calculate', {
+        count: relativeCount,
+        direction: relativeDirection,
+        unit: relativeUnit,
+      })
+    }
   }
 })
 </script>

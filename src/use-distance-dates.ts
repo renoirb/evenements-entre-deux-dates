@@ -142,6 +142,29 @@ export const createDateTime = (
   }
 }
 
+export const createDateTimeCollection = function* dateTimeCollection(
+  min: string,
+  max: string,
+  count: number,
+  unit: DurationUnit,
+): Generator<DateTime> {
+  const minDate = DateTime.fromISO(min)
+  const maxDate = DateTime.fromISO(max)
+  let cur = minDate
+  do {
+    cur = cur.plus({ [unit]: count })
+    console.log('dateTimeCollection', {
+      'cur < maxDate': cur < maxDate,
+      cur: cur.toISODate(),
+      minDate: minDate.toISODate(),
+      min,
+      maxDate: maxDate.toISODate(),
+      max,
+    })
+    yield cur
+  } while (cur < maxDate)
+}
+
 export default (
   location: Location,
   options: Partial<IDistanceDatesModelOptions> = {},

@@ -15,6 +15,14 @@
         </dd>
       </dl>
       <DateRange :distance-dates="distanceDates" class="block" />
+      <div class="block" v-if="nextEvents.length > 1">
+        <h2>Next {{ nextEvents[0].toLocaleString({ weekday: 'long' }) }}s</h2>
+        <ul>
+          <li v-for="(date, index) of nextEvents" :key="index">
+            {{ date.toISODate() }}
+          </li>
+        </ul>
+      </div>
     </section>
   </div>
 </template>
@@ -25,6 +33,7 @@ import {
   default as useDistanceDates,
   createDateTime,
   isFuture,
+  createDateTimeCollection,
 } from './use-distance-dates.ts'
 import DateRange from './components/DateRange.vue'
 import RelativeDateRangeForm from './components/RelativeDateRangeForm.vue'
@@ -49,40 +58,35 @@ export default defineComponent({
       duration,
     }
   },
-  methods: {
-    onRelativeDateRangeFormSubmit({
-      relativeCount,
-      relativeUnit,
-      relativeDirection,
-    }) {
-      const today = relativeDirection === 'FUTURE' ? 'min' : 'max'
-      const field = relativeDirection === 'FUTURE' ? 'max' : 'min'
-      const inTheFuture = isFuture(relativeDirection)
-      const date = createDateTime(
-        relativeCount,
-        relativeUnit,
-        relativeDirection,
+  computed: {
+    nextEvents() {
+      const unit = 'weeks'
+      const count = 1
+      const events = createDateTimeCollection(
+        this.distanceDates.min.value,
+        this.distanceDates.max.value,
+        count,
+        unit,
       )
+      return [...events]
+    },
+  },
+  methods: {
+    onRelativeDateRangeFormSubmit({ count, unit, direction }) {
+      const inTheFuture = isFuture(direction)
+      const today = inTheFuture ? 'min' : 'max'
+      const field = inTheFuture ? 'max' : 'min'
+      const date = createDateTime(count, unit, direction)
       const changeset = {
-        count: relativeCount,
-        unit: relativeUnit,
-        direction: relativeDirection,
+        count,
+        unit,
+        direction,
         today,
         [field]: date.toISODate(),
       }
-      console.log('onRelativeDateRangeFormSubmit', {
-        inTheFuture,
-        today,
-        date,
-        toISODate: date.toISODate(),
-        recv: {
-          relativeCount,
-          relativeUnit,
-          relativeDirection,
-        },
-        changeset,
-      })
       this.changeDateRange(changeset)
+      const events = [...this.nextEvents]
+      console.log('onRelativeDateRangeFormSubmit', events)
     },
   },
 })
