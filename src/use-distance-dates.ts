@@ -21,9 +21,14 @@ export const durationUnits: ReadonlyArray<DurationUnit> = [
   'seconds',
 ] as const
 
+const durationUnitsSet = new Set([...durationUnits] as string[])
+
+export const isInDurationUnits = (value: string): boolean =>
+  durationUnitsSet.has(value)
+
 export type IDateRangeDirection = 'FUTURE' | 'PAST'
 
-export const directions: ReadonlyArray<IDateRangeDirection> = [
+export const directionUnits: ReadonlyArray<IDateRangeDirection> = [
   'FUTURE',
   'PAST',
 ] as const
@@ -35,37 +40,22 @@ export const enum DateRangeDirection {
 
 export interface IDateRangeComponentProps {
   distanceDates: IDistanceDatesModel
-  duration: number
 }
 
 export interface IDateRangeData {
-  directions: ReadonlyArray<IDateRangeDirection>
   durationUnits: ReadonlyArray<DurationUnit>
 }
 
 export const assertsIsDirection = (
   value: DateRangeDirection,
 ): /*asserts*/ value is DateRangeDirection => {
-  switch (directions.includes(value)) {
+  switch (directionUnits.includes(value)) {
     case true:
       // If it was TypeScript 3.7+ we could use asserts ^
       return true
     default:
       throw new TypeError('Unsupported value: ' + JSON.stringify(value))
   }
-}
-
-export interface ICalculateResetForm {
-  direction: IDateRangeDirection
-  unit: DurationUnit
-}
-
-export const resetCalculateBasedForm = (): ICalculateResetForm => {
-  const state: ICalculateResetForm = {
-    direction: 'FUTURE',
-    unit: 'days',
-  }
-  return state
 }
 
 export const isFuture = (direction: DateRangeDirection): boolean => {
@@ -103,7 +93,8 @@ export const distanceDatesModelFields = new Set([
   'unit',
 ])
 
-export const isInDistanceDatesModelFields = distanceDatesModelFields.has
+export const isInDistanceDatesModelFields = (field: string): boolean =>
+  distanceDatesModelFields.has(field)
 
 export type ILoggerFn = (message?: any, ...optionalParams: any[]) => void
 export type ILogger = Record<'info' | 'log' | 'debug' | 'warn', ILoggerFn>
@@ -136,6 +127,19 @@ const defaultOptions: IDistanceDatesModelOptions = {
   defaultDirection: DateRangeDirection.Future,
   defaultDistanceUnit: 'days',
   locale: 'en-CA',
+}
+
+export const createDateTime = (
+  count: number,
+  unit: DurationUnit,
+  direction: DateRangeDirection,
+): DateTime => {
+  const inTheFuture = isFuture(direction)
+  if (inTheFuture) {
+    return DateTime.local().plus({ [unit]: count })
+  } else {
+    return DateTime.local().minus({ [unit]: count })
+  }
 }
 
 export default (
@@ -243,9 +247,9 @@ export default (
   // https://github.com/vuejs/vue-next/blob/master/packages/reactivity/__tests__/effect.spec.ts#L117
 
   return {
+    changeDateRange,
+    changeDirection,
     distanceDates: toRefs(distanceDates),
     duration: readonly(duration),
-    changeDirection,
-    changeDateRange,
   }
 }
