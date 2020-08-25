@@ -63,6 +63,53 @@ export const isFuture = (direction: DateRangeDirection): boolean => {
   return direction === DateRangeDirection.Future
 }
 
+export const toDateTimeInterval = (
+  dateRange: IDateRange,
+): Interval => {
+  const minDate = DateTime.fromISO(dateRange.min)
+  const maxDate = DateTime.fromISO(dateRange.max)
+  const interval = Interval.fromDateTimes(minDate, maxDate)
+  return interval
+}
+
+/**
+ * e.g.
+ * https://calendar.google.com/calendar/r/eventedit?text=Hello&details=Descr&location=home&dates=2020-08-23/2020-08-23
+ *
+ * Bookmarks:
+ * - https://stackoverflow.com/a/23495015
+ * - https://github.com/InteractionDesignFoundation/add-event-to-calendar-docs/blob/master/services/google.md
+ * - https://moment.github.io/luxon/docs/manual/formatting.html#table-of-tokens
+ */
+export const formatCalendarLink = (
+  dateRange: IDateRange,
+  date: DateTime,
+): string => {
+  const FORMAT = 'yyyyMMdd'
+  const urlObj = new URL('https://calendar.google.com/calendar/r/eventedit')
+  urlObj.searchParams.append('ctz', 'America/New_York')
+  urlObj.searchParams.append('text', 'Rendez-vous avec')
+  const minDate = DateTime.fromISO(dateRange.min)
+  const min = minDate.toFormat('DDD')
+  const max = DateTime.fromISO(dateRange.max).toFormat('DDD')
+  const interval = Interval.fromDateTimes(minDate, date)
+  const when = interval.toDuration(['months', 'days']).toObject()
+  const details = `
+----
+Début de période: ${min}
+Fin de période: ${max}
+Moment du rendez-vous: ${when.months} mois, ${when.days} jours
+  `
+  urlObj.searchParams.append('details', details)
+  const dates = [
+    date.toFormat(FORMAT) + 'T190000',
+    date.toFormat(FORMAT) + 'T200000',
+  ]
+  urlObj.searchParams.append('dates', dates.join('/'))
+
+  return urlObj.toString()
+}
+
 export interface IDateRange {
   direction: IDateRangeDirection
   max: string
@@ -126,7 +173,7 @@ export interface IDistanceDatesModelOptions {
 const defaultOptions: IDistanceDatesModelOptions = {
   defaultDirection: DateRangeDirection.Future,
   defaultDistanceUnit: 'days',
-  locale: 'en-CA',
+  locale: 'fr-CA',
 }
 
 export const createDateTime = (
@@ -152,7 +199,7 @@ export const createDateTimeCollection = function* dateTimeCollection(
   const maxDate = DateTime.fromISO(max)
   let cur = minDate
   do {
-    cur = cur.plus({ [unit]: count })
+    /*
     console.log('dateTimeCollection', {
       'cur < maxDate': cur < maxDate,
       cur: cur.toISODate(),
@@ -161,7 +208,9 @@ export const createDateTimeCollection = function* dateTimeCollection(
       maxDate: maxDate.toISODate(),
       max,
     })
+    */
     yield cur
+    cur = cur.plus({ [unit]: count })
   } while (cur < maxDate)
 }
 

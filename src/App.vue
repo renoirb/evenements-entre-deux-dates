@@ -13,13 +13,16 @@
           {{ duration }}
           <span>{{ distanceDates.unit.value }}</span>
         </dd>
+        <dd>{{ textualDuration }}</dd>
       </dl>
       <DateRange :distance-dates="distanceDates" class="block" />
       <div class="block" v-if="nextEvents.length > 1">
-        <h2>Next {{ nextEvents[0].toLocaleString({ weekday: 'long' }) }}s</h2>
-        <ul>
+        <h2>{{ nextEvents[0].toLocaleString({ weekday: 'long' }) }}s</h2>
+        <ul class="no-bullets">
           <li v-for="(date, index) of nextEvents" :key="index">
-            {{ date.toISODate() }}
+            <a :href="formatCalendar(dateRangeValues, date)" target="_blank">{{
+              date.toISODate()
+            }}</a>
           </li>
         </ul>
       </div>
@@ -29,11 +32,15 @@
 
 <script lang="ts">
 import { defineComponent } from 'vue'
+import { DateTime, Interval } from 'luxon'
 import {
   default as useDistanceDates,
   createDateTime,
   isFuture,
   createDateTimeCollection,
+  formatCalendarLink,
+  IDateRange,
+  toDateTimeInterval,
 } from './use-distance-dates.ts'
 import DateRange from './components/DateRange.vue'
 import RelativeDateRangeForm from './components/RelativeDateRangeForm.vue'
@@ -46,7 +53,7 @@ export default defineComponent({
   },
   setup() {
     const useDistanceDatesOptions = {
-      logger: console,
+      // logger: console,
     }
     const { changeDateRange, distanceDates, duration } = useDistanceDates(
       location,
@@ -59,6 +66,14 @@ export default defineComponent({
     }
   },
   computed: {
+    dateRangeValues(): IDateRange {
+      return {
+        direction: this.distanceDates.direction.value,
+        max: this.distanceDates.max.value,
+        min: this.distanceDates.min.value,
+        today: this.distanceDates.today.value,
+      }
+    },
     nextEvents() {
       const unit = 'weeks'
       const count = 1
@@ -70,8 +85,16 @@ export default defineComponent({
       )
       return [...events]
     },
+    textualDuration(): string {
+      const interval = toDateTimeInterval(this.dateRangeValues)
+      const duration = interval.toDuration(['months', 'days']).toObject()
+      return `${duration.months} mois, ${duration.days} jours`
+    }
   },
   methods: {
+    formatCalendar(dateRange: IDateRange, date: DateTime): string {
+      return formatCalendarLink(dateRange, date)
+    },
     onRelativeDateRangeFormSubmit({ count, unit, direction }) {
       const inTheFuture = isFuture(direction)
       const today = inTheFuture ? 'min' : 'max'
@@ -102,5 +125,8 @@ section {
 }
 .block + .block {
   margin-top: 30px;
+}
+ul.no-bullets {
+  list-style-type: none;
 }
 </style>

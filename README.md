@@ -13,3 +13,11 @@ A date range calculator to help schedule events between dates written with
 [vue-next]: https://github.com/vuejs/vue-next/
 [vue-next-composition]: https://v3.vuejs.org/api/composition-api.html#composition-api "Vue 3 composition-api"
 [luxon]: https://moment.github.io/luxon/docs/manual/math.html "Calendar math vs time math with Moment Luxon"
+
+## Bookmarks
+
+- [Calendar][todo-calendar]
+- [Make calendar box as Google Calendar link?][todo-as-add-calendar-link]
+
+[todo-as-add-calendar-link]: https://github.com/decomaan/google-calendar-link-generator/blob/master/app/js/app.js
+[todo-calendar]: https://codepen.io/rachelandrew/pen/PNwaZe 'TODO: Display as a calendar'
