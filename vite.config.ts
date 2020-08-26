@@ -3,7 +3,7 @@ import { UserConfig } from 'vite'
 const config: UserConfig = {
   port: 2020,
   outDir: 'docs',
-  base: '/evenements-entre-deux-dates',
+  base: 'https://renoirb.github.io/evenements-entre-deux-dates/',
   assetsDir: '',
 }
 
