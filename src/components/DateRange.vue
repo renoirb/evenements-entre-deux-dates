@@ -2,6 +2,7 @@
   <form method="GET">
     <fieldset>
       <legend>Propriétés</legend>
+      <!--
       <label
         for="unit"
       >
@@ -10,8 +11,31 @@
       <SelectDateRangeUnit
         :value="distanceDates.unit.value"
         name="unit"
+        id="unit"
         @change="onChangeSelectDateRangeUnit"
       />
+      -->
+      <label
+        for="locale"
+      >
+        Locale
+      </label>
+      <select
+        v-model="distanceDates.locale.value"
+        name="locale"
+        id="locale"
+      >
+        <option
+          v-for="([item, label], index) of localesUnits"
+          :key="index"
+          :value="item"
+          :selected="item === distanceDates.locale.value"
+        >
+          {{ label }}
+        </option>
+      </select>
+    </fieldset>
+    <fieldset>
       <label
         for="min"
       >
@@ -54,9 +78,8 @@
         @click="distanceDatesTodayClick"
         title="Ajuster avec la date d’aujourd’hui"
       />
-      <br/>
-      <button type="submit">Appliquer</button>
     </fieldset>
+    <button type="submit">Appliquer</button>
   </form>
 </template>
 
@@ -64,10 +87,11 @@
 import { defineComponent } from 'vue'
 import SelectDateRangeUnit from './SelectDateRangeUnit.vue'
 import {
+  DurationUnit,
+  durationUnits,
   IDateRangeComponentProps,
   IDateRangeData,
-  durationUnits,
-  DurationUnit,
+  localesUnits,
 } from '../use-distance-dates.ts'
 
 export default defineComponent<IDateRangeComponentProps, IDateRangeData, {}>({
@@ -83,6 +107,7 @@ export default defineComponent<IDateRangeComponentProps, IDateRangeData, {}>({
   data() {
     return {
       durationUnits,
+      localesUnits,
     }
   },
   methods: {

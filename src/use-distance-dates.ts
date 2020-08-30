@@ -11,6 +11,19 @@ import {
 } from 'vue'
 import { DateTime, Interval, DurationUnit } from 'luxon'
 
+export const localesUnits: [string, string][] = [
+  ['fr-CA', 'Français Canada'],
+  ['en-CA', 'English Canada'],
+  ['en-CA-u-ca-buddhist', 'English Canada with Budhist calendar'],
+  ['pt-BR', 'Português'],
+  ['ja-JP', '日本語 (Japanese)'],
+  [
+    'ja-Jpan-JP-u-ca-japanese-hc-h12',
+    '日本語 (Japanese with Japanese calendar)',
+  ],
+  ['hi-IN', 'हिन्दी (Hindi)'],
+]
+
 export const durationUnits: ReadonlyArray<DurationUnit> = [
   'years',
   'months',
@@ -63,9 +76,7 @@ export const isFuture = (direction: DateRangeDirection): boolean => {
   return direction === DateRangeDirection.Future
 }
 
-export const toDateTimeInterval = (
-  dateRange: IDateRange,
-): Interval => {
+export const toDateTimeInterval = (dateRange: IDateRange): Interval => {
   const minDate = DateTime.fromISO(dateRange.min)
   const maxDate = DateTime.fromISO(dateRange.max)
   const interval = Interval.fromDateTimes(minDate, maxDate)
@@ -87,18 +98,19 @@ export const formatCalendarLink = (
 ): string => {
   const FORMAT = 'yyyyMMdd'
   const urlObj = new URL('https://calendar.google.com/calendar/r/eventedit')
+  const { locale = 'en-CA' } = dateRange
   urlObj.searchParams.append('ctz', 'America/New_York')
   urlObj.searchParams.append('text', 'Rendez-vous avec')
-  const minDate = DateTime.fromISO(dateRange.min)
+  const minDate = DateTime.fromISO(dateRange.min, { locale })
   const min = minDate.toFormat('DDD')
-  const max = DateTime.fromISO(dateRange.max).toFormat('DDD')
+  const max = DateTime.fromISO(dateRange.max, { locale }).toFormat('DDD')
   const interval = Interval.fromDateTimes(minDate, date)
   const when = interval.toDuration(['months', 'days']).toObject()
   const details = `
 ----
 Début de période: ${min}
 Fin de période: ${max}
-Moment du rendez-vous: ${when.months} mois, ${when.days} jours
+Moment du rendez-vous: ${when.months} mois, ${Math.ceil(when.days)} jours
   `
   urlObj.searchParams.append('details', details)
   const dates = [
@@ -112,13 +124,10 @@ Moment du rendez-vous: ${when.months} mois, ${when.days} jours
 
 export interface IDateRange {
   direction: IDateRangeDirection
+  locale?: string
   max: string
   min: string
   today: 'max' | 'min' | false
-}
-
-export interface IPreferences {
-  locale: string
 }
 
 export interface IDistance {
@@ -129,7 +138,7 @@ export interface IComputed {
   duration: Ref<number>
 }
 
-export type IDistanceDatesModel = IDateRange & IDistance & IPreferences
+export type IDistanceDatesModel = IDateRange & IDistance
 
 export const distanceDatesModelFields = new Set([
   'direction',
@@ -180,37 +189,40 @@ export const createDateTime = (
   count: number,
   unit: DurationUnit,
   direction: DateRangeDirection,
+  locale: string = 'en-CA',
 ): DateTime => {
   const inTheFuture = isFuture(direction)
+  let d: DateTime
   if (inTheFuture) {
-    return DateTime.local().plus({ [unit]: count })
+    d = DateTime.local().plus({ [unit]: count })
   } else {
-    return DateTime.local().minus({ [unit]: count })
+    d = DateTime.local().minus({ [unit]: count })
   }
+  d.setLocale(locale)
+  return d
+}
+
+export interface ICreateDateTimeCollectionOptions
+  extends Pick<IDistanceDatesModel, 'locale' | 'min' | 'max' | 'unit'> {
+  count: number
 }
 
 export const createDateTimeCollection = function* dateTimeCollection(
-  min: string,
-  max: string,
-  count: number,
-  unit: DurationUnit,
+  opts: ICreateDateTimeCollectionOptions,
 ): Generator<DateTime> {
-  const minDate = DateTime.fromISO(min)
-  const maxDate = DateTime.fromISO(max)
+  const { min, max, count, unit, locale = 'en-CA' } = opts
+  const today = DateTime.local()
+  today.setLocale(locale)
+  let minDate = DateTime.fromISO(min, { locale })
+  if (minDate < today) {
+    minDate = today
+  }
+  const maxDate = DateTime.fromISO(max, { locale })
   let cur = minDate
   do {
-    /*
-    console.log('dateTimeCollection', {
-      'cur < maxDate': cur < maxDate,
-      cur: cur.toISODate(),
-      minDate: minDate.toISODate(),
-      min,
-      maxDate: maxDate.toISODate(),
-      max,
-    })
-    */
     yield cur
     cur = cur.plus({ [unit]: count })
+    cur.setLocale(locale)
   } while (cur < maxDate)
 }
 
@@ -262,6 +274,10 @@ export default (
     changeset: Partial<IDistanceDatesModel> = {},
   ): void => {
     const before = { ...unref(distanceDates) }
+    logger.debug(`use-distance-dates 1/2: changeDateRange`, {
+      before,
+      changeset,
+    })
     for (const [key, value] of Object.entries(changeset)) {
       if (distanceDatesModelFields.has(key)) {
         if (
@@ -281,7 +297,7 @@ export default (
     if ('today' in changeset && typeof changeset.today === 'string') {
       distanceDates[changeset.today] = today
     }
-    logger.debug(`use-distance-dates: changeDateRange`, {
+    logger.debug(`use-distance-dates 2/2: changeDateRange`, {
       before,
       after: { ...unref(distanceDates) },
     })
@@ -299,17 +315,26 @@ export default (
         changeset[key] = value
       }
     }
+    logger.debug(`use-distance-dates: onMounted`, {
+      changeset,
+    })
     changeDateRange(changeset)
   })
 
   watchEffect(() => {
     const unit = distanceDates.unit
-    const max = DateTime.fromISO(distanceDates.max)
-    const min = DateTime.fromISO(distanceDates.min)
+    const locale = distanceDates.locale
+    const max = DateTime.fromISO(distanceDates.max, {
+      locale,
+    })
+    const min = DateTime.fromISO(distanceDates.min, {
+      locale,
+    })
     const interval = Interval.fromDateTimes(min, max)
     const computedDuration = Math.ceil(interval.length(unit))
     duration.value = computedDuration
     logger.debug(`use-distance-dates: watchEffect`, {
+      locale,
       duration: unref(duration),
       max: unref(distanceDates.max),
       min: unref(distanceDates.min),
