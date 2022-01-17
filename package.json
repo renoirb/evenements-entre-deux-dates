@@ -22,11 +22,13 @@
     "preinstall": "node -e \"if(process.env.npm_execpath.indexOf('pnpm') === -1) throw new Error('Dependencies must be installed with PNPM: https://pnpm.js.org/')\"",
     "prepublishOnly": "use-run-all lint fix build"
   },
+  "prettier": "@renoirb/conventions-use-prettier",
   "dependencies": {
-    "luxon": "^1.24.0"
+    "luxon": "^2.3.0"
   },
   "devDependencies": {
     "@renoirb/conventions-code-formatter": "^1.3.0",
+    "@renoirb/conventions-use-prettier": "^1.3.0",
     "@renoirb/tools-bundling-helpers": "^1.2.1",
     "@types/luxon": "^1.24.0",
     "@vue/compiler-sfc": "^3.0.0-rc.1",

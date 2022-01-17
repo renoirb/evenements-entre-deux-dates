@@ -6,10 +6,10 @@ import {
   ToRefs,
   unref,
   ref,
-  Ref,
   readonly,
 } from 'vue'
 import { DateTime, Interval, DurationUnit } from 'luxon'
+import { IComputed, ILogger, NoOpLogger } from './utils'
 
 export const localesUnits: [string, string][] = [
   ['fr-CA', 'Français Canada'],
@@ -53,16 +53,19 @@ export const enum DateRangeDirection {
 
 export interface IDateRangeComponentProps {
   distanceDates: IDistanceDatesModel
+  isPregnancy: boolean
 }
 
 export interface IDateRangeData {
   durationUnits: ReadonlyArray<DurationUnit>
 }
 
+export type IDurationUnit = IDateRangeData['durationUnits'][number]
+
 export const assertsIsDirection = (
   value: DateRangeDirection,
 ): /*asserts*/ value is DateRangeDirection => {
-  switch (directionUnits.includes(value)) {
+  switch (isDirection(value)) {
     case true:
       // If it was TypeScript 3.7+ we could use asserts ^
       return true
@@ -71,9 +74,26 @@ export const assertsIsDirection = (
   }
 }
 
-export const isFuture = (direction: DateRangeDirection): boolean => {
-  assertsIsDirection(direction)
-  return direction === DateRangeDirection.Future
+export const isDirection = (
+  direction: unknown,
+): direction is DateRangeDirection =>
+  directionUnits.includes(direction as DateRangeDirection)
+
+export const isFuture = (
+  direction: unknown,
+): direction is DateRangeDirection.Future => {
+  return isDirection(direction) && direction === DateRangeDirection.Future
+}
+
+export const isDateTimeString = (input: unknown): input is DateTime => {
+  let outcome = false
+  try {
+    const _ = DateTime.fromISO(input as string)
+    outcome = true
+  } catch {
+    // Nothing to do
+  }
+  return outcome
 }
 
 export const toDateTimeInterval = (dateRange: IDateRange): Interval => {
@@ -81,6 +101,41 @@ export const toDateTimeInterval = (dateRange: IDateRange): Interval => {
   const maxDate = DateTime.fromISO(dateRange.max)
   const interval = Interval.fromDateTimes(minDate, maxDate)
   return interval
+}
+
+export const verbalizeDurationText = (
+  interval: Interval,
+  durationKeys: DurationUnit[] = ['years', 'months', 'days'],
+): string => {
+  const { years = 0, months = 0, weeks = 0, days = 0 } = interval
+    .toDuration([...durationKeys])
+    .toObject()
+  const parts = [
+    years !== 0 ? `${Math.ceil(years)} ${years > 1 ? 'annés' : 'an'}` : '',
+    months !== 0 ? `${Math.ceil(months)} mois` : '',
+    weeks !== 0
+      ? `${Math.ceil(weeks)} ${weeks > 1 ? 'semaines' : 'semaine'}`
+      : '',
+    days !== 0 ? `${Math.ceil(days)} jours` : '',
+  ].filter((i) => i !== '')
+  return parts.join(', ')
+}
+
+export const formatCalendarEventText = (
+  dateRange: IDateRange,
+  date: DateTime,
+): string => {
+  const { locale = 'en-CA' } = dateRange
+  const minDate = DateTime.fromISO(dateRange.min, { locale })
+  const min = minDate.toFormat('DDD')
+  const max = DateTime.fromISO(dateRange.max, { locale }).toFormat('DDD')
+  const interval = Interval.fromDateTimes(minDate, date)
+  const momentRendezVous = verbalizeDurationText(interval)
+  return `
+  Début de période: ${min}
+  Fin de période: ${max}
+  Moment du rendez-vous: ${momentRendezVous}
+  `
 }
 
 /**
@@ -96,23 +151,13 @@ export const formatCalendarLink = (
   dateRange: IDateRange,
   date: DateTime,
 ): string => {
-  const FORMAT = 'yyyyMMdd'
+  const details = '\n----\n' + formatCalendarEventText(dateRange, date)
+
   const urlObj = new URL('https://calendar.google.com/calendar/r/eventedit')
-  const { locale = 'en-CA' } = dateRange
   urlObj.searchParams.append('ctz', 'America/New_York')
   urlObj.searchParams.append('text', 'Rendez-vous avec')
-  const minDate = DateTime.fromISO(dateRange.min, { locale })
-  const min = minDate.toFormat('DDD')
-  const max = DateTime.fromISO(dateRange.max, { locale }).toFormat('DDD')
-  const interval = Interval.fromDateTimes(minDate, date)
-  const when = interval.toDuration(['months', 'days']).toObject()
-  const details = `
-----
-Début de période: ${min}
-Fin de période: ${max}
-Moment du rendez-vous: ${when.months} mois, ${Math.ceil(when.days)} jours
-  `
   urlObj.searchParams.append('details', details)
+  const FORMAT = 'yyyyMMdd'
   const dates = [
     date.toFormat(FORMAT) + 'T190000',
     date.toFormat(FORMAT) + 'T200000',
@@ -134,11 +179,18 @@ export interface IDistance {
   unit: DurationUnit
 }
 
-export interface IComputed {
-  duration: Ref<number>
+export type IDistanceDatesModel = IDateRange & IDistance
+
+export interface ICreateDateTimeCollectionOptions extends IDistanceDatesModel {
+  count: number
+  direction: IDateRange['direction']
 }
 
-export type IDistanceDatesModel = IDateRange & IDistance
+export interface IRelativeDateRangeCalculate {
+  count: number
+  direction: IDateRange['direction']
+  unit: IDistance['unit']
+}
 
 export const distanceDatesModelFields = new Set([
   'direction',
@@ -152,29 +204,17 @@ export const distanceDatesModelFields = new Set([
 export const isInDistanceDatesModelFields = (field: string): boolean =>
   distanceDatesModelFields.has(field)
 
-export type ILoggerFn = (message?: any, ...optionalParams: any[]) => void
-export type ILogger = Record<'info' | 'log' | 'debug' | 'warn', ILoggerFn>
-
-const noOpLogger: ILoggerFn = (message?: any, ...optionalParams: any[]) =>
-  void 0
-
-export class NoOpLogger implements ILogger {
-  info = noOpLogger
-  log = noOpLogger
-  debug = noOpLogger
-  warn = noOpLogger
-}
-
 export interface IDistanceDatesSurface extends IComputed {
   distanceDates: ToRefs<IDistanceDatesModel>
   changeDirection(direction: DateRangeDirection): void
-  changeDateRange(dateRange: Partial<IDateRange>): void
+  mutate(changeset: Partial<IDistanceDatesModel>): void
   logger?: ILogger
+  urlObj: URL
 }
 
 export interface IDistanceDatesModelOptions {
-  defaultDirection: IDateRangeDirection
-  defaultDistanceUnit: DurationUnit
+  defaultDirection: IDateRange['direction']
+  defaultDistanceUnit: IDistance['unit']
   locale: string
   logger?: ILogger
 }
@@ -186,44 +226,69 @@ const defaultOptions: IDistanceDatesModelOptions = {
 }
 
 export const createDateTime = (
-  count: number,
-  unit: DurationUnit,
-  direction: DateRangeDirection,
   locale: string = 'en-CA',
+  change: Partial<IRelativeDateRangeCalculate>,
 ): DateTime => {
-  const inTheFuture = isFuture(direction)
-  let d: DateTime
-  if (inTheFuture) {
-    d = DateTime.local().plus({ [unit]: count })
-  } else {
-    d = DateTime.local().minus({ [unit]: count })
+  const { count = 0, unit = 'months', direction = 'FUTURE' } = change
+  let d = DateTime.local()
+  if (count > 0) {
+    if (direction && unit) {
+      if (isFuture(direction)) {
+        d = d.plus({ [unit]: count })
+      } else {
+        d = d.minus({ [unit]: count })
+      }
+    } else {
+      const message = `Missing properties: unit, direction`
+      throw new Error(message)
+    }
   }
+
   d.setLocale(locale)
   return d
 }
 
-export interface ICreateDateTimeCollectionOptions
-  extends Pick<IDistanceDatesModel, 'locale' | 'min' | 'max' | 'unit'> {
-  count: number
-}
+export const flipMaxMin = (input: 'max' | 'min'): 'max' | 'min' =>
+  input === 'max' ? 'min' : 'max'
 
 export const createDateTimeCollection = function* dateTimeCollection(
   opts: ICreateDateTimeCollectionOptions,
+  adjust: number,
 ): Generator<DateTime> {
   const { min, max, count, unit, locale = 'en-CA' } = opts
-  const today = DateTime.local()
-  today.setLocale(locale)
   let minDate = DateTime.fromISO(min, { locale })
+  const today = createDateTime(locale, { count: 0 })
   if (minDate < today) {
+    // What makes it so that we do not see dates in past
     minDate = today
   }
   const maxDate = DateTime.fromISO(max, { locale })
-  let cur = minDate
+  let cur = minDate.plus({ days: adjust })
   do {
     yield cur
     cur = cur.plus({ [unit]: count })
-    cur.setLocale(locale)
   } while (cur < maxDate)
+}
+
+export const validateRelativeDateRangePayload = <
+  T extends IRelativeDateRangeCalculate
+>(
+  payload: T,
+) => {
+  const { count, direction, unit } = payload
+  if (isDirection(direction) === false) {
+    const message = `The direction property must either be: 'FUTURE' or 'PAST', we got: ${direction}`
+    throw new Error(message)
+  }
+  if (Number.isInteger(count) === false || count < 0) {
+    const message = `The count property must be a number above 0, we got: ${count}`
+    throw new Error(message)
+  }
+  if (isInDurationUnits(unit) === false) {
+    const message = `The unit property must be a string describing a unit of time, we got: ${unit}`
+    throw new Error(message)
+  }
+  return true
 }
 
 export default (
@@ -243,14 +308,14 @@ export default (
     logger = opts.logger
   }
 
-  const distanceDates = reactive<IDistanceDatesModel>({
+  const distanceDates = reactive({
     direction: opts.defaultDirection,
     locale: opts.locale,
     max: today,
     min: today,
     today: false,
     unit: opts.defaultDistanceUnit,
-  })
+  } as IDistanceDatesModel)
 
   logger.debug(`use-distance-dates: startup`)
 
@@ -270,11 +335,9 @@ export default (
     }
   }
 
-  const changeDateRange = (
-    changeset: Partial<IDistanceDatesModel> = {},
-  ): void => {
+  const mutate = (changeset: Partial<IDistanceDatesModel> = {}): void => {
     const before = { ...unref(distanceDates) }
-    logger.debug(`use-distance-dates 1/2: changeDateRange`, {
+    logger.debug(`use-distance-dates 1/2: mutate`, {
       before,
       changeset,
     })
@@ -290,14 +353,16 @@ export default (
           `
           logger.warn(message)
         } else {
-          distanceDates[key] = value
+          // distanceDates[key] = value
+          Reflect.set(distanceDates, key, value)
         }
       }
     }
     if ('today' in changeset && typeof changeset.today === 'string') {
-      distanceDates[changeset.today] = today
+      // distanceDates[changeset.today] = today
+      Reflect.set(distanceDates, changeset.today, today, distanceDates)
     }
-    logger.debug(`use-distance-dates 2/2: changeDateRange`, {
+    logger.debug(`use-distance-dates 2/2: mutate`, {
       before,
       after: { ...unref(distanceDates) },
     })
@@ -312,40 +377,47 @@ export default (
     const changeset: Partial<IDistanceDatesModel> = {}
     for (const [key, value] of parsed) {
       if (distanceDatesModelFields.has(key)) {
-        changeset[key] = value
+        // changeset[key] = value
+        Reflect.set(changeset, key, value)
       }
     }
     logger.debug(`use-distance-dates: onMounted`, {
       changeset,
+      search,
+      location,
     })
-    changeDateRange(changeset)
+    mutate(changeset)
   })
 
   watchEffect(() => {
-    const unit = distanceDates.unit
-    const locale = distanceDates.locale
+    const before = { ...unref(distanceDates) }
+    logger.debug(`use-distance-dates 1/2: watchEffect`, {
+      before,
+    })
     const max = DateTime.fromISO(distanceDates.max, {
-      locale,
+      locale: distanceDates.locale,
     })
     const min = DateTime.fromISO(distanceDates.min, {
-      locale,
+      locale: distanceDates.locale,
     })
     const interval = Interval.fromDateTimes(min, max)
-    const computedDuration = Math.ceil(interval.length(unit))
+    const computedDuration = Math.ceil(interval.length(distanceDates.unit))
     duration.value = computedDuration
-    logger.debug(`use-distance-dates: watchEffect`, {
-      locale,
+    logger.debug(`use-distance-dates 2/2: watchEffect`, {
+      before,
+      after: { ...unref(distanceDates) },
       duration: unref(duration),
-      max: unref(distanceDates.max),
-      min: unref(distanceDates.min),
     })
   })
+
+  const urlObj = new URL(location.href)
 
   // https://github.com/vuejs/vue-next/blob/master/packages/reactivity/__tests__/effect.spec.ts#L117
 
   return {
-    changeDateRange,
+    mutate,
     changeDirection,
+    urlObj,
     distanceDates: toRefs(distanceDates),
     duration: readonly(duration),
   }

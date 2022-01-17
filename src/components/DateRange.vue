@@ -1,107 +1,86 @@
 <template>
-  <form method="GET">
+  <form method="GET" data-component-name="DateRange">
     <fieldset>
       <legend>Propriétés</legend>
-      <!--
-      <label
-        for="unit"
-      >
-        Unité de mesure
-      </label>
-      <SelectDateRangeUnit
-        :value="distanceDates.unit.value"
-        name="unit"
-        id="unit"
-        @change="onChangeSelectDateRangeUnit"
-      />
-      -->
-      <label
-        for="locale"
-      >
-        Locale
-      </label>
-      <select
-        v-model="distanceDates.locale.value"
-        name="locale"
-        id="locale"
-      >
+      <label for="locale"> Locale </label>
+      <select v-model="distanceDates.locale.value" name="locale">
         <option
-          v-for="([item, label], index) of localesUnits"
           :key="index"
-          :value="item"
-          :selected="item === distanceDates.locale.value"
+          :selected="locale === distanceDates.locale.value"
+          :value="locale"
+          v-for="([locale, label], index) of localesUnits"
         >
           {{ label }}
         </option>
       </select>
     </fieldset>
     <fieldset>
-      <label
-        for="min"
-      >
-        De
-      </label>
+      <label for="pregnancy">Pré-natalité?</label>
       <input
+        @click="(e) => e.preventDefault()"
+        name="pregnancy"
+        type="checkbox"
+        v-model="isPregnancy"
+        value=""
+      />
+      <label for="min"> De </label>
+      <input
+        @click="distancesDatesMaxInputClick"
         :max="distanceDates.max.value"
-        id="min"
         name="min"
         type="date"
         v-model="distanceDates.min.value"
       />
       <span class="validity"></span>
       <input
-        type="radio"
-        name="today"
-        value="min"
-        v-model="distanceDates.today.value"
         @click="distanceDatesTodayClick"
+        name="today"
         title="Ajuster avec la date d’aujourd’hui"
+        type="radio"
+        v-if="!isPregnancy"
+        v-model="distanceDates.today.value"
+        value="min"
       />
-      <label
-        for="max"
-      >
-        À
-      </label>
+      <label for="max"> À </label>
       <input
+        @click="distancesDatesMaxInputClick"
         :min="distanceDates.min.value"
-        id="max"
         name="max"
         type="date"
         v-model="distanceDates.max.value"
       />
       <span class="validity"></span>
       <input
-        type="radio"
-        name="today"
-        value="max"
-        v-model="distanceDates.today.value"
         @click="distanceDatesTodayClick"
+        name="today"
         title="Ajuster avec la date d’aujourd’hui"
+        type="radio"
+        v-if="!isPregnancy"
+        v-model="distanceDates.today.value"
+        value="max"
       />
     </fieldset>
     <button type="submit">Appliquer</button>
+    <button type="reset" @click="resetClick">Reset</button>
   </form>
 </template>
 
 <script lang="ts">
 import { defineComponent } from 'vue'
-import SelectDateRangeUnit from './SelectDateRangeUnit.vue'
-import {
-  DurationUnit,
-  durationUnits,
-  IDateRangeComponentProps,
-  IDateRangeData,
-  localesUnits,
-} from '../use-distance-dates.ts'
+import { durationUnits, localesUnits } from '../use-distance-dates'
+import type { IDateRange } from '../use-distance-dates'
 
-export default defineComponent<IDateRangeComponentProps, IDateRangeData, {}>({
+export default defineComponent({
   name: 'DateRange',
-  components: {
-    SelectDateRangeUnit,
-  },
   props: {
     distanceDates: {
       required: true,
+      // type: Object as PropType<IDistanceDatesModel>,
+      // validator: (v: IDistanceDatesModel) => false,
+    },
+    pregnancy: {
+      type: String,
+      default: '',
     },
   },
   data() {
@@ -110,21 +89,33 @@ export default defineComponent<IDateRangeComponentProps, IDateRangeData, {}>({
       localesUnits,
     }
   },
-  methods: {
-    onChangeSelectDateRangeUnit({value}) {
-      this.distanceDates.unit.value = value
+  computed: {
+    isPregnancy() {
+      return this.pregnancy !== ''
     },
-    distanceDatesTodayClick(event) {
+  },
+  methods: {
+    resetClick() {
+      location.search = ''
+    },
+    distancesDatesMaxInputClick(event: HTMLElementEventMap['click']) {
+      if (this.isPregnancy) {
+        event.preventDefault()
+        const input = event.target
+        console.log('Veuillez faire un nouveau calcul', { input })
+      }
+    },
+    distanceDatesTodayClick(event: HTMLElementEventMap['click']) {
       // If clicking on a radio button that's already
       // clicked, unset it.
       const today = this.distanceDates.today.value
       const { target = {} } = event
-      const { value = '' } = target
+      const { value } = target as { value: IDateRange['today'] }
       if (today === value) {
         this.distanceDates.today.value = false
       }
-    }
-  }
+    },
+  },
 })
 </script>
 

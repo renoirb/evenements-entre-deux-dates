@@ -2,29 +2,60 @@
   <div>
     <h1>Événements entre deux dates</h1>
     <section>
-      <RelativeDateRangeForm
-        @calculate="onRelativeDateRangeFormSubmit"
-        class="block"
-      />
-      <hr class="block" />
-      <DateRange :distance-dates="distanceDates" class="block" />
-      <hr class="block" />
       <div class="block">
+        <h2>Nouveau calcul</h2>
+        <details>
+          <summary>Générique</summary>
+          <RelativeDateRangeForm @calculate="onCalculate" />
+        </details>
+        <details>
+          <summary>Pré-natalité</summary>
+          <RelativeDateRangeForm
+            @calculate="onCalculate"
+            :for-pregnancy="true"
+          />
+        </details>
+        <hr v-if="duration > 0" />
+      </div>
+      <div class="block" v-if="duration > 0">
         <h2>
-          <span>Durée:&nbsp;</span>
-          <small>{{ textualDuration }}</small>
+          Calcul
+          <span v-if="isPregnancy"> de pré-natalité</span>
+          <span v-if="!isPregnancy" :title="duration + ' jours'">
+            couvrant {{ durationText }}
+          </span>
         </h2>
-        <div
-          class="events"
-          v-if="nextEvents.length > 1"
-        >
+        <DateRange :distance-dates="distanceDates" :pregnancy="pregnancy" />
+        <hr />
+      </div>
+      <div class="block" v-if="isPregnancy">
+        <h3>Pré-natalité</h3>
+        <dl>
+          <dt>Date prévue selon l’échographie</dt>
+          <dd>
+            <time
+              :lang="distanceDatesCopy.locale"
+              :datetime="pregnancyExpectedDueDate.toISODate()"
+            >
+              {{ pregnancyExpectedDueDateText }}
+            </time>
+          </dd>
+          <dt>Semaine numéro</dt>
+          <dd>{{ currentWeekNumber }}</dd>
+          <dt>Jours avant prochaine semaine</dt>
+          <dd>{{ daysTillNextWeek }}</dd>
+        </dl>
+        <hr />
+      </div>
+      <div class="block" v-if="nextEventsCount > 0">
+        <div class="events" v-if="nextEventsCount > 1">
           <h3>
             <span>Dates des prochains&nbsp;</span>
             <em>
               {{
                 nextEvents[0].toLocaleString({
                   weekday: 'long',
-                  locale: dateRangeValues.locale,
+                  locale: distanceDatesCopy.locale,
                 })
               }}s
             </em>
@@ -32,28 +63,30 @@
           <ul class="no-bullets">
             <li
               v-for="(date, index) of nextEvents"
-              :key="index + '--' + dateRangeValues.locale"
+              :key="index + '--' + distanceDatesCopy.locale"
             >
               <!-- Code smellllllls FIXME, please! -->
+              <time> ({{ toWeekNumber(date) }})&nbsp; </time>
               <a
-                :href="formatCalendar(dateRangeValues, date)"
-                :data-date-locale="
-                  date.toISODate() +
-                  '--' +
-                  dateRangeValues.locale
-                "
+                :href="formatCalendarLink(distanceDatesCopy, date)"
+                :title="formatCalendarEventText(distanceDatesCopy, date)"
                 target="_blank"
               >
-                {{
-                  date.toRelativeCalendar({
-                    locale: dateRangeValues.locale,
-                  }) +
-                  ', ' +
-                  date.toLocaleString({
-                    dateStyle: 'medium',
-                    locale: dateRangeValues.locale,
-                  })
-                }}
+                <time
+                  :lang="distanceDatesCopy.locale"
+                  :datetime="date.toISODate()"
+                >
+                  {{
+                    date.toRelativeCalendar({
+                      locale: distanceDatesCopy.locale,
+                    }) +
+                    ', ' +
+                    date.toLocaleString({
+                      dateStyle: 'medium',
+                      locale: distanceDatesCopy.locale,
+                    })
+                  }}
+                </time>
               </a>
             </li>
           </ul>
@@ -64,19 +97,26 @@
 </template>
 
 <script lang="ts">
-import { defineComponent } from 'vue'
+import { defineComponent, ref, readonly } from 'vue'
 import { DateTime, Interval } from 'luxon'
 import {
   default as useDistanceDates,
   createDateTime,
-  isFuture,
   createDateTimeCollection,
+  flipMaxMin,
+  formatCalendarEventText,
   formatCalendarLink,
-  IDateRange,
+  isFuture,
   toDateTimeInterval,
-} from './use-distance-dates.ts'
+  verbalizeDurationText,
+} from './use-distance-dates'
+import type {
+  IDistanceDatesModel,
+  ICreateDateTimeCollectionOptions,
+} from './use-distance-dates'
 import DateRange from './components/DateRange.vue'
 import RelativeDateRangeForm from './components/RelativeDateRangeForm.vue'
+import type { IRelativeDateRangeCalculateEmit } from './components/RelativeDateRangeForm.vue'
 
 export default defineComponent({
   name: 'App',
@@ -88,65 +128,145 @@ export default defineComponent({
     const useDistanceDatesOptions = {
       // logger: console,
     }
-    const { changeDateRange, distanceDates, duration } = useDistanceDates(
-      location,
-      useDistanceDatesOptions,
-    )
-    return {
-      changeDateRange,
+    const {
+      mutate,
       distanceDates,
       duration,
+      urlObj: { searchParams },
+    } = useDistanceDates(location, useDistanceDatesOptions)
+
+    const hasPregnancyInUrl = searchParams.has('pregnancy')
+    const max = searchParams.get('max')
+    const pregnancy = ref(hasPregnancyInUrl ? max : '')
+
+    return {
+      mutate,
+      distanceDates,
+      duration,
+      pregnancy,
     }
   },
   computed: {
-    dateRangeValues(): IDateRange {
-      return {
-        direction: this.distanceDates.direction.value,
-        locale: this.distanceDates.locale.value,
-        max: this.distanceDates.max.value,
-        min: this.distanceDates.min.value,
-        today: this.distanceDates.today.value,
+    isPregnancy(): boolean {
+      return this.pregnancy !== ''
+    },
+    pregnancyExpectedDueDateText(): string {
+      const text = this.pregnancyExpectedDueDate.toLocaleString(
+        DateTime.DATE_HUGE,
+      )
+      return text !== null ? text : ''
+    },
+    pregnancyExpectedDueDate(): DateTime {
+      let errorMessage = `This is not for a pregnancy calculation`
+      if (this.isPregnancy === false) {
+        throw new Error(errorMessage)
+      }
+      if (this.pregnancy !== '' && this.pregnancy !== null) {
+        const date = DateTime.fromISO(this.pregnancy)
+        date.setLocale(this.distanceDatesCopy.locale ?? 'en-CA')
+        return date
+      } else {
+        errorMessage += `. The date was in an unexpected format: ${this.pregnancy}`
+        throw new Error(errorMessage)
       }
     },
-    nextEvents() {
-      const unit = 'weeks'
-      const count = 1
-      const events = createDateTimeCollection({
-        count,
-        locale: this.distanceDates.locale.value,
-        max: this.distanceDates.max.value,
-        min: this.distanceDates.min.value,
-        unit,
-      })
-      return [...events]
+    distanceDatesCopy(): IDistanceDatesModel {
+      return readonly(this.distanceDates)
     },
-    textualDuration(): string {
-      const interval = toDateTimeInterval(this.dateRangeValues)
-      const duration = interval.toDuration(['months', 'days']).toObject()
-      return `${duration.months} mois, ${duration.days} jours`
+    nextEventsCount(): number {
+      return this.nextEvents.length
+    },
+    nextEvents(): DateTime[] {
+      const iterable = createDateTimeCollection(
+        {
+          ...this.distanceDatesCopy,
+          count: 1,
+          unit: 'weeks',
+        } as ICreateDateTimeCollectionOptions,
+        this.isPregnancy ? this.daysTillNextWeek : 0,
+      )
+      return Array.from(iterable)
+    },
+    durationText(): string {
+      const interval = toDateTimeInterval(this.distanceDatesCopy)
+      return verbalizeDurationText(interval)
+    },
+    currentWeekNumber(): number {
+      if (this.isPregnancy) {
+        const today = DateTime.local()
+        return this.toWeekNumber(today)
+      }
+      return -1 // TODO finish this
+    },
+    daysTillNextWeek(): number {
+      const weekdayToday: number = DateTime.local().weekday
+      const weekdayBegin: number = DateTime.fromISO(this.distanceDatesCopy.max)
+        .weekday
+      const calc = weekdayBegin - weekdayToday
+      return calc === 0 ? 7 : calc
     },
   },
   methods: {
-    formatCalendar(dateRange: IDateRange, date: DateTime): string {
-      return formatCalendarLink(dateRange, date)
+    /**
+     * Only useful for preparing calendar of events
+     */
+    toWeekNumber(date: DateTime): number {
+      // Oh, yiss. That's WAY too complex. Whatev.
+      // Should we want to use direction for calculation.
+      // ... should make this even more complex. TechDebt++
+      const leftDateValue = this.isPregnancy
+        ? this.distanceDatesCopy.min
+        : this.distanceDatesCopy.max
+      const leftDate = DateTime.fromISO(leftDateValue).minus({
+        week: 1,
+      })
+      // ^ For some reason have to remove a week to calculate. Gotta rewrite with tests.
+      const rightDate = DateTime.fromISO(date.toISODate() as string)
+      const interval = this.isPregnancy
+        ? Interval.fromDateTimes(leftDate, rightDate)
+        : Interval.fromDateTimes(rightDate, leftDate)
+      const duration = interval.toDuration(['weeks']).toObject()
+      const { weeks = 0 } = duration
+      const out = Math.ceil(weeks)
+      return this.isPregnancy ? out : out === 0 ? 0 : -out
     },
-    onRelativeDateRangeFormSubmit({ count, unit, direction }) {
+    onCalculate(payload: IRelativeDateRangeCalculateEmit) {
+      const { locale } = this.distanceDatesCopy
+
+      const { pregnancy = '', count, direction, unit } = payload
+      this.pregnancy = pregnancy
       const inTheFuture = isFuture(direction)
-      const today = inTheFuture ? 'min' : 'max'
-      const field = inTheFuture ? 'max' : 'min'
-      const { locale } = this.dateRangeValues
-      const date = createDateTime(count, unit, direction, locale)
-      const changeset = {
-        [field]: date.toISODate(),
-        count,
+      let field: 'max' | 'min' = inTheFuture ? 'max' : 'min'
+      let today: IDistanceDatesModel['today'] = false
+
+      let changeset: Partial<IDistanceDatesModel> = {
         direction,
         locale,
         today,
         unit,
       }
-      this.changeDateRange(changeset)
-      const events = [...this.nextEvents]
+
+      let date: DateTime
+      if (pregnancy !== '') {
+        // Behavior when calculating pregnancy
+        date = this.pregnancyExpectedDueDate
+        Reflect.set(changeset, 'max', date.toISODate())
+        // Only supporting when known expected date
+        // Calculations should reflect (hopefully)
+        // -> https://www.babycenter.com/pregnancy-due-date-calculator
+        const minDate = date.minus({ weeks: 38 })
+        Reflect.set(changeset, 'min', minDate.toISODate())
+      } else {
+        // Default behavior
+        date = createDateTime(locale, { count, unit, direction })
+        Reflect.set(changeset, field, date.toISODate())
+        Reflect.set(changeset, flipMaxMin(field), DateTime.local().toISODate())
+        Reflect.set(changeset, 'today', inTheFuture ? 'min' : 'max')
+      }
+      this.mutate(changeset)
     },
+    formatCalendarLink,
+    formatCalendarEventText,
   },
 })
 </script>
